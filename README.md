@@ -1,42 +1,30 @@
-# sv
+# 1TV
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Netflix privado con catálogo de películas, series y anime vía API de Vimeus. SvelteKit 2 + Svelte 5 (runes) + Tailwind v4 + Supabase.
 
-## Creating a project
+## Stack
+- **Frontend:** SvelteKit 2, Svelte 5 runes, Tailwind v4, Geist, HugeIcons free
+- **Backend:** Supabase (auth OTP, Postgres, RLS) + API Vimeus (server-side only)
+- **Deploy:** Vercel (`@sveltejs/adapter-vercel`, cron cada 6h)
 
-If you're seeing this, you've probably already done this step. Congrats!
-
+## Desarrollo
 ```sh
-# create a new project
-npx sv create my-app
+cp .env.example .env.local   # llenar valores reales
+npm install
+npm run dev                  # http://localhost:5175
 ```
 
-To recreate this project with the same configuration:
+## Deploy en Vercel
+1. Importar repo en https://vercel.com/new (detecta SvelteKit).
+2. Environment Variables:
+   - `PUBLIC_SUPABASE_URL`
+   - `PUBLIC_SUPABASE_ANON_KEY`
+   - `VIMEUS_API_KEY` (solo servidor)
+   - `PUBLIC_VIMEUS_VIEW_KEY`
+   - `CRON_SECRET` (random 32 chars; Vercel Cron lo envía como Bearer a `/api/admin/sync`)
+3. Deploy. El cron indexa todo el catálogo a `cached_listings`.
 
-```sh
-# recreate this project
-npx sv@0.17.0 create --template minimal --types ts --add tailwindcss="plugins:none" --no-download-check --install npm .
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+## Indexación
+- Automática: cron `/api/admin/sync` cada 6h (`vercel.json`), pagina movies/series/animes completo con reintentos.
+- Manual local: `node scripts/sync.mjs`.
+- Caché: L1 RAM (15 min TTL) + L2 tabla `cached_listings` en Supabase.
