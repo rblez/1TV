@@ -9,14 +9,22 @@ function apiKey(): string {
 	return k;
 }
 
-async function fetchPage(key: 'movies' | 'series' | 'animes', page: number) {
-	const url = `${VIMEUS_BASE}/api/listing/${key}?page=${page}`;
-	const r = await fetch(url, { headers: { Accept: 'application/json', 'X-API-Key': apiKey() } });
-	const body = (await r.json()) as { error?: boolean; data?: { result?: VimeusItem[]; pages?: number } };
-	if (r.status !== 200 || body.error || !body.data?.result) throw new Error(`page ${page} failed: ${r.status}`);
-	const inferred = key === 'movies' ? 'movie' : key === 'animes' ? 'anime' : 'series';
-	for (const it of body.data.result as VimeusItem[]) if (!(it as unknown as Record<string, unknown>).content_type) (it as unknown as Record<string, unknown>).content_type = inferred;
-	return { items: body.data.result as VimeusItem[], pages: body.data.pages ?? null };
+async function fetchPage(key: 'movies' | 'series' | 'animes', page: number, retries = 3): Promise<{ items: VimeusItem[]; pages: number | null }> {
+	for (let attempt = 1; attempt <= retries; attempt++) {
+		try {
+			const url = `${VIMEUS_BASE}/api/listing/${key}?page=${page}`;
+			const r = await fetch(url, { headers: { Accept: 'application/json', 'X-API-Key': apiKey() }, signal: AbortSignal.timeout(12000) });
+			const body = (await r.json()) as { error?: boolean; data?: { result?: VimeusItem[]; pages?: number } };
+			if (r.status !== 200 || body.error || !body.data?.result) throw new Error(`page ${page} failed: ${r.status}`);
+			const inferred = key === 'movies' ? 'movie' : key === 'animes' ? 'anime' : 'series';
+			for (const it of body.data.result as VimeusItem[]) if (!(it as unknown as Record<string, unknown>).content_type) (it as unknown as Record<string, unknown>).content_type = inferred;
+			return { items: body.data.result as VimeusItem[], pages: body.data.pages ?? null };
+		} catch (e) {
+			if (attempt === retries) throw e;
+			await new Promise((r) => setTimeout(r, 800 * attempt));
+		}
+	}
+	throw new Error('unreachable');
 }
 
 export async function syncAll(
